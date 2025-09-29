@@ -50,19 +50,6 @@ async function main() {
   const removeTx = await positionManager.decreaseLiquidity(decreaseLiquidityParams, { gasLimit: 1000000 });
   const removeReceipt = await removeTx.wait();
   console.log(`流动性移除成功！交易哈希: ${removeReceipt.hash}`);
-
-  // 提取代币（collect）
-  const collectParams = {
-    tokenId: REMOVE_LIQUIDITY_CONFIG.tokenId,
-    recipient: deployer.address,
-    amount0Max: ethers.MaxUint256,
-    amount1Max: ethers.MaxUint256
-  };
-
-  console.log("提取代币...");
-  const collectTx = await positionManager.collect(collectParams, { gasLimit: 1000000 });
-  const collectReceipt = await collectTx.wait();
-  console.log(`代币提取成功！交易哈希: ${collectReceipt.hash}`);
 }
 
 main()

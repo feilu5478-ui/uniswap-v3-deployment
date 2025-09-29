@@ -1,0 +1,24 @@
+{
+  "network": "sepolia",
+  "chainId": 11155111,
+  "deployer": "0x7c6332D587B13E38A677f1556809301D5A2E1B60",
+  "timestamp": "2025-09-26T07:22:47.620Z",
+  "contracts": {
+    "TokenA": {
+      "address": "0x0e569Be095CE21E6f689602499b571A5B2ad6f71",
+      "transactionHash": "0x0d0252c75f785f9cafa5995583dedbaf58a3175f7681fc886fbb04bc12ffe667"
+    },
+    "TokenB": {
+      "address": "0x90DC2DDd03AC665CDb95FD5E141DbF51F144e785",
+      "transactionHash": "0xc9ca322e2b69c8080f8b66a8ea1d43d1abddee1e0a7e628c9f83d450d8270e2d"
+    },
+    "Pool": {
+      "address": "0x91da8CdeF7cB1Dd7c9C8f140FE6177172755EA68",
+      "token0": "0x0e569Be095CE21E6f689602499b571A5B2ad6f71",
+      "token1": "0x90DC2DDd03AC665CDb95FD5E141DbF51F144e785",
+      "fee": 500,
+      "transactionHash": "0xec7e9d0b491b3b4b15c8551f0c1ec10e1d93db3f670f9c56a0be905dc3c6e7b2",
+      "liquidityTransaction": "0x4beaa92d01d8780a3897b2708151fa82b524887bb23b8916ce5b6452c0f2d31e"
+    }
+  }
+}

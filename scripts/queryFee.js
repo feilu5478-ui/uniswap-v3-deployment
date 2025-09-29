@@ -2,15 +2,15 @@ const { ethers } = require("hardhat");
 const path = require("path");
 const fs = require("fs");
 
-// 配置参数：要领取手续费的流动性头寸ID
+// 配置参数：要提取代币的流动性头寸ID
 const COLLECT_CONFIG = {
-  tokenId: 9, // 需要根据实际记录填写
+  tokenId: 1, // 需要根据实际记录填写
   network: "sepolia" // 默认网络名称，可通过命令行参数覆盖
 };
 
 async function main() {
   const [deployer] = await ethers.getSigners();
-  console.log("使用账户领取手续费:", deployer.address);
+  console.log("使用账户提取代币:", deployer.address);
 
   // 解析命令行参数（如果有）
   const args = process.argv.slice(2);
@@ -25,7 +25,7 @@ async function main() {
   // 获取网络信息
   const network = await ethers.provider.getNetwork();
   const networkName = network.name === "unknown" ? COLLECT_CONFIG.network : network.name;
-  console.log(`在 ${networkName} 网络上执行提取操作`);
+  console.log(`在 ${networkName} 网络上执行查询待提取手续费操作`);
 
   // 加载部署信息
   const deploymentsDir = path.join(__dirname, "..", "deployments");
@@ -94,86 +94,6 @@ async function main() {
   console.log(`- 待提取 ${token0Symbol}: ${ethers.formatUnits(tokensOwed0, token0Decimals)}`);
   console.log(`- 待提取 ${token1Symbol}: ${ethers.formatUnits(tokensOwed1, token1Decimals)}`);
   
-  // 3. 检查是否有代币可提取
-  if (tokensOwed0 === 0n && tokensOwed1 === 0n) {
-    console.log("⚠️ 没有可提取的手续费，无需执行提取操作");
-    return;
-  }
-  
-  // 4. 准备提取参数
-  const collectParams = {
-    tokenId: COLLECT_CONFIG.tokenId,
-    recipient: deployer.address,
-    amount0Max: tokensOwed0,
-    amount1Max: tokensOwed1
-  };
-  
-  console.log("提取参数:");
-  console.log(`- 接收方: ${deployer.address}`);
-  console.log(`- 提取 ${token0Symbol} 数量: ${ethers.formatUnits(tokensOwed0, token0Decimals)}`);
-  console.log(`- 提取 ${token1Symbol} 数量: ${ethers.formatUnits(tokensOwed1, token1Decimals)}`);
-  
-  // 5. 获取当前账户余额（提取前）
-  const balance0Before = await token0.balanceOf(deployer.address);
-  const balance1Before = await token1.balanceOf(deployer.address);
-  
-  console.log("提取前账户余额:");
-  console.log(`- ${token0Symbol}: ${ethers.formatUnits(balance0Before, token0Decimals)}`);
-  console.log(`- ${token1Symbol}: ${ethers.formatUnits(balance1Before, token1Decimals)}`);
-  
-  // 6. 执行提取操作
-  try {
-    console.log("正在提取手续费...");
-    const collectTx = await positionManager.collect(collectParams, { 
-      gasLimit: 300000 
-    });
-    
-    console.log(`交易已发送，哈希: ${collectTx.hash}`);
-    const collectReceipt = await collectTx.wait();
-    console.log(`✅ 手续费提取成功！区块号: ${collectReceipt.blockNumber}`);
-    
-    // 7. 验证提取结果
-    const balance0After = await token0.balanceOf(deployer.address);
-    const balance1After = await token1.balanceOf(deployer.address);
-    
-    const received0 = balance0After - balance0Before;
-    const received1 = balance1After - balance1Before;
-    
-    console.log("提取后账户余额:");
-    console.log(`- ${token0Symbol}: ${ethers.formatUnits(balance0After, token0Decimals)}`);
-    console.log(`- ${token1Symbol}: ${ethers.formatUnits(balance1After, token1Decimals)}`);
-    
-    console.log("实际提取数量:");
-    console.log(`- ${token0Symbol}: ${ethers.formatUnits(received0, token0Decimals)}`);
-    console.log(`- ${token1Symbol}: ${ethers.formatUnits(received1, token1Decimals)}`);
-    
-    // 验证提取数量是否正确
-    if (received0 !== tokensOwed0) {
-      console.warn(`⚠️ ${token0Symbol} 提取数量不匹配: 预期 ${ethers.formatUnits(tokensOwed0, token0Decimals)}, 实际 ${ethers.formatUnits(received0, token0Decimals)}`);
-    }
-    
-    if (received1 !== tokensOwed1) {
-      console.warn(`⚠️ ${token1Symbol} 提取数量不匹配: 预期 ${ethers.formatUnits(tokensOwed1, token1Decimals)}, 实际 ${ethers.formatUnits(received1, token1Decimals)}`);
-    }
-    
-    if (received0 === tokensOwed0 && received1 === tokensOwed1) {
-      console.log("🎉 手续费提取完全成功！");
-    }
-  } catch (error) {
-    console.error("❌ 手续费提取失败:", error);
-    
-    // 尝试解析错误原因
-    if (error.data) {
-      try {
-        const decodedError = positionManager.interface.parseError(error.data);
-        console.error("错误详情:", decodedError.name, decodedError.args);
-      } catch (e) {
-        console.error("无法解析错误数据:", error.data);
-      }
-    }
-    
-    throw error;
-  }
 }
 
 main()

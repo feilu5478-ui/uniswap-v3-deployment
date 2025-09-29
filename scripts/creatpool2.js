@@ -11,15 +11,15 @@ const UniswapV3PoolArtifact = require("@uniswap/v3-core/artifacts/contracts/Unis
 
 // 配置参数
 const TOKEN_A_CONFIG = {
-  name: "以太坊",
-  symbol: "ETH",
+  name: "天",
+  symbol: "TT",
   decimals: 18,
   totalSupply: "1000000" // 100万枚
 };
 
 const TOKEN_B_CONFIG = {
-  name: "测试币",
-  symbol: "TST",
+  name: "地",
+  symbol: "DD",
   decimals: 18,
   totalSupply: "1000000" // 100万枚
 };
@@ -38,15 +38,20 @@ const EXISTING_CONTRACTS = {
   SwapRouter: "0x3DDB759BF377A352aA12e319a93B17ffA512Dd69"
 };
 
-// 正确计算 sqrtPriceX96 (兼容 ethers v6)
-function encodePriceSqrt(reserve1, reserve0) {
-  // 使用 bignumber.js 进行高精度数学计算
-  return BigInt(new bn(reserve1.toString())
-    .div(reserve0.toString())
-    .sqrt()
-    .multipliedBy(new bn(2).pow(96))
-    .integerValue(3) // 3 表示向下取整
-    .toString());
+// 正确计算 sqrtPriceX96 (修复版本)
+function encodePriceSqrt(token1Amount, token0Amount) {
+  // 确保使用正确的顺序：token1/token0
+  const price = new bn(token1Amount.toString()).div(token0Amount.toString());
+  const sqrtPrice = price.sqrt();
+  const sqrtPriceX96 = sqrtPrice.multipliedBy(new bn(2).pow(96));
+  
+  return BigInt(sqrtPriceX96.integerValue(bn.ROUND_DOWN).toString());
+}
+
+// 计算 tick 从价格
+function priceToTick(price) {
+  const tick = Math.floor(Math.log(price) / Math.log(1.0001));
+  return tick;
 }
 
 async function main() {
@@ -113,15 +118,18 @@ async function main() {
   );
 
   // 确定代币顺序 (Uniswap 要求 token0 < token1)
-  let token0, token1;
+  let token0, token1, isTokenA0;
   if (tokenAAddress.toLowerCase() < tokenBAddress.toLowerCase()) {
     token0 = tokenAAddress;
     token1 = tokenBAddress;
+    isTokenA0 = true;
+    console.log("代币顺序: token0=TokenA(TT), token1=TokenB(DD)");
   } else {
     token0 = tokenBAddress;
     token1 = tokenAAddress;
+    isTokenA0 = false;
+    console.log("代币顺序: token0=TokenB(DD), token1=TokenA(TT)");
   }
-  console.log(`代币顺序: token0=${token0}, token1=${token1}`);
 
   // 检查池子是否已存在
   const existingPoolAddress = await factory.getPool(token0, token1, POOL_CONFIG.fee);
@@ -135,6 +143,7 @@ async function main() {
     };
   } else {
     // 创建新池子
+    console.log("创建新池子...");
     const tx = await factory.createPool(token0, token1, POOL_CONFIG.fee);
     const receipt = await tx.wait();
     
@@ -158,14 +167,27 @@ async function main() {
       deployer
     );
 
-    // 计算初始 sqrtPriceX96
-    const sqrtPriceX96 = encodePriceSqrt(POOL_CONFIG.initialPrice, 1);
+    // 计算初始 sqrtPriceX96 - 根据代币顺序调整价格计算
+    let sqrtPriceX96;
+    if (isTokenA0) {
+      // token0 = TT, token1 = DD, 价格 1 TT = 1 DD
+      sqrtPriceX96 = encodePriceSqrt(1, 1); // token1/token0 = 1/1 = 1
+    } else {
+      // token0 = DD, token1 = TT, 价格 1 DD = 1 TT 意味着 1 DD = 1 TT
+      sqrtPriceX96 = encodePriceSqrt(1, 1); // token1/token0 = 1/1 = 1
+    }
+    
     console.log("初始 sqrtPriceX96:", sqrtPriceX96.toString());
 
     // 初始化池子
     const initializeTx = await pool.initialize(sqrtPriceX96);
     await initializeTx.wait();
     console.log("✅ 池子初始化成功");
+
+    // 验证初始化结果
+    const slot0 = await pool.slot0();
+    console.log("初始化后的 sqrtPriceX96:", slot0.sqrtPriceX96.toString());
+    console.log("初始化后的 tick:", slot0.tick.toString());
   }
 
   // 4. 为池子提供初始流动性
@@ -182,20 +204,22 @@ async function main() {
 
   // 批准PositionManager使用代币
   const maxApproveAmount = ethers.MaxUint256;
+  
   console.log("批准 TokenA...");
   const approveTxA = await tokenAInstance.approve(EXISTING_CONTRACTS.NonfungiblePositionManager, maxApproveAmount);
   await approveTxA.wait();
   console.log("✅ TokenA 批准成功");
-  // 检查授权额度
-    const allowanceA = await tokenAInstance.allowance(deployer.address, EXISTING_CONTRACTS.NonfungiblePositionManager);
-    console.log("TokenA 授权额度:", ethers.formatUnits(allowanceA, 18));
+  
   console.log("批准 TokenB...");
   const approveTxB = await tokenBInstance.approve(EXISTING_CONTRACTS.NonfungiblePositionManager, maxApproveAmount);
   await approveTxB.wait();
   console.log("✅ TokenB 批准成功");
-    // 检查授权额度
-    const allowanceB = await tokenBInstance.allowance(deployer.address, EXISTING_CONTRACTS.NonfungiblePositionManager);
-    console.log("TokenB 授权额度:", ethers.formatUnits(allowanceB, 18));
+
+  // 检查授权额度
+  const allowanceA = await tokenAInstance.allowance(deployer.address, EXISTING_CONTRACTS.NonfungiblePositionManager);
+  const allowanceB = await tokenBInstance.allowance(deployer.address, EXISTING_CONTRACTS.NonfungiblePositionManager);
+  console.log("TokenA 授权额度:", ethers.formatUnits(allowanceA, 18));
+  console.log("TokenB 授权额度:", ethers.formatUnits(allowanceB, 18));
 
   // 检查余额
   const tokenABalance = await tokenAInstance.balanceOf(deployer.address);
@@ -203,20 +227,7 @@ async function main() {
   console.log("TokenA 余额:", ethers.formatUnits(tokenABalance, 18));
   console.log("TokenB 余额:", ethers.formatUnits(tokenBBalance, 18));
 
-  // 确定流动性参数
-  // let amount0Desired, amount1Desired;
-  
-  // 根据代币顺序确定流动性数量
-  // if (token0 === tokenAAddress) {
-  //   amount0Desired = ethers.parseUnits("1000", 18); // 1000 TokenA
-  //   amount1Desired = ethers.parseUnits("1000", 18); // 1000 TokenB (1:1 价格)
-  // } else {
-  //   amount0Desired = ethers.parseUnits("1000", 18); // 1000 TokenB
-  //   amount1Desired = ethers.parseUnits("1000", 18); // 1000 TokenA (1:1 价格)
-  // }
-  const amount0Desired0 = ethers.parseUnits("1000", 18);
-  const amount0Desired1 = ethers.parseUnits("1000", 18);
-  // 获取当前池子状态以确定合适的tick范围
+  // 获取当前池子状态
   const poolAddress = deploymentInfo.contracts.Pool.address;
   const pool = new ethers.Contract(
     poolAddress,
@@ -225,40 +236,88 @@ async function main() {
   );
   
   const slot0 = await pool.slot0();
-  const currentTick = Number(slot0.tick); // 转换为 Number 类型
+  const currentTick = Number(slot0.tick);
   console.log("当前池子 tick:", currentTick);
   console.log("当前池子 sqrtPriceX96:", slot0.sqrtPriceX96.toString());
+
+  // 根据代币顺序确定流动性数量
+  let amount0Desired, amount1Desired;
+  const liquidityAmount = "1000"; // 每种代币提供1000个
+  
+  if (isTokenA0) {
+    // token0 = TT, token1 = DD
+    amount0Desired = ethers.parseUnits(liquidityAmount, 18); // 1000 TT
+    amount1Desired = ethers.parseUnits(liquidityAmount, 18); // 1000 DD
+  } else {
+    // token0 = DD, token1 = TT  
+    amount0Desired = ethers.parseUnits(liquidityAmount, 18); // 1000 DD
+    amount1Desired = ethers.parseUnits(liquidityAmount, 18); // 1000 TT
+  }
+
+  // 计算合适的tick范围（围绕当前价格）
+  const tickLower = Math.floor(currentTick / POOL_CONFIG.tickSpacing) * POOL_CONFIG.tickSpacing - POOL_CONFIG.tickSpacing * 10;
+  const tickUpper = Math.floor(currentTick / POOL_CONFIG.tickSpacing) * POOL_CONFIG.tickSpacing + POOL_CONFIG.tickSpacing * 10;
+
+  console.log("流动性范围:");
+  console.log("- Tick Lower:", tickLower);
+  console.log("- Tick Upper:", tickUpper);
+  console.log("- Tick 间距:", POOL_CONFIG.tickSpacing);
 
   // 设置流动性参数
   const liquidityParams = {
     token0: token0,
     token1: token1,
     fee: POOL_CONFIG.fee,
-    tickLower: currentTick - 10000, // 价格范围下限
-    tickUpper: currentTick + 10000, // 价格范围上限
-    amount0Desired: amount0Desired0,
-    amount1Desired: amount0Desired1,
+    tickLower: tickLower,
+    tickUpper: tickUpper,
+    amount0Desired: amount0Desired,
+    amount1Desired: amount1Desired,
     amount0Min: 0,
     amount1Min: 0,
     recipient: deployer.address,
     deadline: Math.floor(Date.now() / 1000) + 60 * 20 // 20分钟有效期
   };
 
-  console.log("添加流动性参数:", {
-    ...liquidityParams
-    // amount0Desired: ethers.formatUnits(amount0Desired, 18),
-    // amount1Desired: ethers.formatUnits(amount1Desired, 18)
-  });
+  console.log("添加流动性参数:");
+  console.log("- Token0:", liquidityParams.token0);
+  console.log("- Token1:", liquidityParams.token1);
+  console.log("- Amount0:", ethers.formatUnits(amount0Desired, 18));
+  console.log("- Amount1:", ethers.formatUnits(amount1Desired, 18));
+  console.log("- Fee:", liquidityParams.fee);
 
   // 添加初始流动性
   try {
-    const liquidityTx = await positionManager.mint(liquidityParams, { gasLimit: 1000000 });
+    console.log("发送添加流动性交易...");
+    const liquidityTx = await positionManager.mint(
+      liquidityParams,
+      { gasLimit: 5000000 } // 增加gas限制
+    );
+    
+    console.log("交易已发送，等待确认...");
     const liquidityReceipt = await liquidityTx.wait();
     console.log("✅ 流动性添加成功，交易哈希:", liquidityReceipt.hash);
+
+    // 解析事件日志查看结果
+    const mintEvent = liquidityReceipt.logs.find(log => 
+      log.topics[0] === ethers.id("Mint(address,address,uint256,uint256,uint256)")
+    );
+    
+    if (mintEvent) {
+      console.log("✅ Mint事件触发成功");
+    }
 
     deploymentInfo.contracts.Pool.liquidityTransaction = liquidityReceipt.hash;
   } catch (error) {
     console.error("❌ 添加流动性失败:", error);
+    
+    // 尝试获取更详细的错误信息
+    if (error.reason) {
+      console.error("错误原因:", error.reason);
+    }
+    if (error.data) {
+      console.error("错误数据:", error.data);
+    }
+    
     // 保存部署信息，即使流动性添加失败
     saveDeploymentInfo(networkName, deploymentInfo);
     throw error;
@@ -273,6 +332,7 @@ async function main() {
   console.log("- TokenB 地址:", tokenBAddress);
   console.log("- 流动池地址:", deploymentInfo.contracts.Pool.address);
   console.log("- 流动性交易:", deploymentInfo.contracts.Pool.liquidityTransaction);
+  console.log("- 代币顺序:", isTokenA0 ? "TokenA(TT) -> TokenB(DD)" : "TokenB(DD) -> TokenA(TT)");
 }
 
 // 保存部署信息到文件
@@ -287,7 +347,7 @@ function saveDeploymentInfo(networkName, deploymentInfo) {
     fs.mkdirSync(networkDir);
   }
   
-  const deploymentFilePath = path.join(networkDir, "pool2-deployment.json");
+  const deploymentFilePath = path.join(networkDir, "pool3-deployment.json");
   fs.writeFileSync(deploymentFilePath, JSON.stringify(deploymentInfo, null, 2));
   
   console.log(`✅ 部署信息已保存到: ${deploymentFilePath}`);

@@ -91,24 +91,6 @@ async function main() {
     console.error("查询池子状态失败:", error);
   }
   
-  // 查询交易次数
-  try {
-    const txCount = await pool.txCount();
-    console.log("\n交易次数:", txCount.toString());
-  } catch (error) {
-    console.warn("无法查询交易次数:", error.message);
-  }
-  
-  // 查询池子储备量
-  try {
-    const reserves = await pool.getReserves();
-    console.log("\n储备量:");
-    console.log(`- ${tokenASymbol}: ${ethers.formatUnits(reserves[0], tokenADecimals)}`);
-    console.log(`- ${tokenBSymbol}: ${ethers.formatUnits(reserves[1], tokenBDecimals)}`);
-  } catch (error) {
-    console.warn("无法查询储备量:", error.message);
-  }
-  
   console.log("\n✅ 查询完成");
 }
 

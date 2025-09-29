@@ -17,7 +17,7 @@ async function main() {
   // 读取部署信息
   const network = await ethers.provider.getNetwork();
   const networkName = network.name === "unknown" ? "localhost" : network.name;
-  const deploymentInfoPath = path.join(__dirname, "..", "deployments", networkName, "pool-deployment.json");
+  const deploymentInfoPath = path.join(__dirname, "..", "deployments", networkName, "pool2-deployment.json");
   const deploymentInfo = JSON.parse(fs.readFileSync(deploymentInfoPath, "utf8"));
 
   const tokenAAddress = deploymentInfo.contracts.TokenA.address;
@@ -37,12 +37,12 @@ async function main() {
   const tokenB = await ethers.getContractAt("guoWenCoin", tokenBAddress);
 
   // 批准代币
-  // console.log("批准TokenA...");
-  // const approveTxA = await tokenA.approve(positionManager.target, ethers.MaxUint256);
-  // await approveTxA.wait();
-  // console.log("批准TokenB...");
-  // const approveTxB = await tokenB.approve(positionManager.target, ethers.MaxUint256);
-  // await approveTxB.wait();
+  console.log("批准TokenA...");
+  const approveTxA = await tokenA.approve(positionManager.target, ethers.MaxUint256);
+  await approveTxA.wait();
+  console.log("批准TokenB...");
+  const approveTxB = await tokenB.approve(positionManager.target, ethers.MaxUint256);
+  await approveTxB.wait();
 
   // 确定代币顺序（与创建池子时一致）
   let token0, token1;
@@ -71,8 +71,8 @@ async function main() {
     token0: token0,
     token1: token1,
     fee: poolFee,
-    tickLower: -100000, // 价格范围下限
-    tickUpper: 100000, // 价格范围上限
+    tickLower: -10010, // 价格范围下限
+    tickUpper: 10010, // 价格范围上限
     amount0Desired: NEW_POSITION_CONFIG.amount0Desired,
     amount1Desired: NEW_POSITION_CONFIG.amount1Desired,
     amount0Min: 0,
